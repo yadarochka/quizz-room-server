@@ -68,7 +68,7 @@ async function getSessionResults(sessionId) {
 
   const session = await get(
     db,
-    `SELECT qs.id as session_id, q.title as quiz_title
+    `SELECT qs.id as session_id, q.title as quiz_title, qs.quiz_id
      FROM quiz_sessions qs
      JOIN quizzes q ON qs.quiz_id = q.id
      WHERE qs.id = ?`,
@@ -90,16 +90,80 @@ async function getSessionResults(sessionId) {
     [sessionId]
   );
 
+  // Get detailed answers for each participant
+  const participantsWithDetails = await Promise.all(rows.map(async (r) => {
+    const answers = await all(
+      db,
+      `SELECT ua.question_id,
+              ua.selected_answer_id,
+              ua.is_correct,
+              q.text as question_text,
+              q."order" as question_order,
+              a.text as selected_answer_text,
+              correct_a.text as correct_answer_text
+       FROM user_answers ua
+       JOIN questions q ON ua.question_id = q.id
+       LEFT JOIN answers a ON ua.selected_answer_id = a.id
+       LEFT JOIN answers correct_a ON correct_a.question_id = q.id AND correct_a.is_correct = 1
+       WHERE ua.session_id = ? AND ua.user_id = ?
+       ORDER BY q."order"`,
+      [sessionId, r.user_id]
+    );
+
+    return {
+      user_id: r.user_id,
+      display_name: r.display_name,
+      correct_answers: r.correct_answers,
+      total_questions: r.total_questions,
+      score: r.score,
+      answers: answers.map(a => ({
+        question_id: a.question_id,
+        question_text: a.question_text,
+        question_order: a.question_order,
+        selected_answer_id: a.selected_answer_id,
+        selected_answer_text: a.selected_answer_text,
+        correct_answer_text: a.correct_answer_text,
+        is_correct: a.is_correct === 1
+      }))
+    };
+  }));
+
+  // Get all questions with their correct answers
+  const allQuestions = await all(
+    db,
+    `SELECT q.id, q.text, q."order",
+            GROUP_CONCAT(a.id || ':' || a.text || ':' || a.is_correct, '|') as answers_data
+     FROM questions q
+     LEFT JOIN answers a ON a.question_id = q.id
+     WHERE q.quiz_id = ?
+     GROUP BY q.id, q.text, q."order"
+     ORDER BY q."order"`,
+    [session.quiz_id]
+  );
+
+  const questionsWithAnswers = allQuestions.map(q => {
+    const answers = q.answers_data ? q.answers_data.split('|').map(a => {
+      const [id, text, isCorrect] = a.split(':');
+      return {
+        id: parseInt(id),
+        text: text,
+        is_correct: isCorrect === '1'
+      };
+    }) : [];
+    return {
+      id: q.id,
+      text: q.text,
+      order: q.order,
+      answers: answers
+    };
+  });
+
   return {
     session_id: session.session_id,
     quiz_title: session.quiz_title,
     total_questions: rows[0] ? rows[0].total_questions : 0,
-    participants: rows.map(r => ({
-      user_id: r.user_id,
-      display_name: r.display_name,
-      correct_answers: r.correct_answers,
-      score: r.score
-    }))
+    participants: participantsWithDetails,
+    questions: questionsWithAnswers
   };
 }
 
