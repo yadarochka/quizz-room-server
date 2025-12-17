@@ -4,7 +4,7 @@
  */
 
 const DEFAULT_QUESTIONS_COUNT = 5;
-const DEFAULT_TIME_LIMIT = 30;
+const DEFAULT_TIME_LIMIT = 15;
 
 const PROVIDERS = {
   GROQ: 'groq',
