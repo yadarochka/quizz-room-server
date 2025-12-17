@@ -51,7 +51,7 @@ async function generateQuestions(topic, count = DEFAULT_QUESTIONS_COUNT) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.1-70b-versatile', // Free model on Groq
+        model: 'llama-3.1-8b-instant', // Updated model - fast and free on Groq
         messages: [
           {
             role: 'system',
