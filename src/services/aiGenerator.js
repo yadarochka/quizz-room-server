@@ -81,13 +81,24 @@ async function generateQuestions(topic, count = DEFAULT_QUESTIONS_COUNT) {
 
     // Extract JSON from response (remove markdown code blocks if present)
     let jsonContent = content;
-    if (content.startsWith('```json')) {
-      jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    } else if (content.startsWith('```')) {
-      jsonContent = content.replace(/```\n?/g, '').trim();
+    if (content.includes('```json')) {
+      jsonContent = content.split('```json')[1].split('```')[0].trim();
+    } else if (content.includes('```')) {
+      jsonContent = content.split('```')[1].split('```')[0].trim();
     }
 
-    const questions = JSON.parse(jsonContent);
+    let questions;
+    try {
+      questions = JSON.parse(jsonContent);
+    } catch (parseError) {
+      // Try to find JSON array in the response
+      const jsonMatch = jsonContent.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        questions = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('Failed to parse AI response as JSON');
+      }
+    }
 
     // Validate and format questions
     if (!Array.isArray(questions)) {
