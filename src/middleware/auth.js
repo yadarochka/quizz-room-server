@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { getDb, get } = require('../config/database');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d';
@@ -54,8 +55,19 @@ function requireAuth(req, res, next) {
   }
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    req.user = payload;
-    next();
+
+    // ensure user still exists in DB to avoid FK errors with stale cookies
+    const db = getDb();
+    get(db, 'SELECT id, email, name FROM users WHERE id = ?', [payload.id])
+      .then((user) => {
+        if (!user) {
+          clearAuthCookie(res);
+          return res.status(401).json({ error: 'User not found' });
+        }
+        req.user = { ...payload, ...user };
+        next();
+      })
+      .catch((e) => res.status(401).json({ error: e.message }));
   } catch (e) {
     return res.status(401).json({ error: 'Invalid token' });
   }
