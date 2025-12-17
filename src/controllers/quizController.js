@@ -98,7 +98,7 @@ async function listMyQuizzesHandler(req, res, next) {
 const generateQuestionsSchema = Joi.object({
   topic: Joi.string().min(1).max(255).required(),
   count: Joi.number().integer().min(1).max(20).optional().default(5),
-  provider: Joi.string().valid('groq', 'openai', 'gemini', 'deepseek').optional().default('groq')
+  provider: Joi.string().valid('groq', 'gemini').optional().default('groq')
 });
 
 async function generateQuestionsHandler(req, res, next) {

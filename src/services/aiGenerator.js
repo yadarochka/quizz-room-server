@@ -1,6 +1,6 @@
 /**
  * AI Question Generator supporting multiple providers
- * Supports: Groq, OpenAI, Gemini, DeepSeek
+ * Supports: Groq, Gemini (both free)
  */
 
 const DEFAULT_QUESTIONS_COUNT = 5;
@@ -8,9 +8,7 @@ const DEFAULT_TIME_LIMIT = 30;
 
 const PROVIDERS = {
   GROQ: 'groq',
-  OPENAI: 'openai',
-  GEMINI: 'gemini',
-  DEEPSEEK: 'deepseek'
+  GEMINI: 'gemini'
 };
 
 /**
@@ -133,56 +131,6 @@ async function generateWithGroq(topic, batchCount) {
   return formatQuestions(questions);
 }
 
-/**
- * Generate questions using OpenAI API
- */
-async function generateWithOpenAI(topic, batchCount) {
-  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-  
-  if (!OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is not configured. Please set it in environment variables.');
-  }
-
-  const prompt = buildPrompt(topic, batchCount);
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: 'Ты помощник для создания вопросов квизов. Отвечай только валидным JSON без дополнительного текста.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 4000,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  const content = data.choices[0]?.message?.content?.trim();
-
-  if (!content) {
-    throw new Error('No content received from AI');
-  }
-
-  const questions = parseAIResponse(content);
-  return formatQuestions(questions);
-}
 
 /**
  * Generate questions using Google Gemini API
@@ -230,56 +178,6 @@ async function generateWithGemini(topic, batchCount) {
   return formatQuestions(questions);
 }
 
-/**
- * Generate questions using DeepSeek API
- */
-async function generateWithDeepSeek(topic, batchCount) {
-  const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-  
-  if (!DEEPSEEK_API_KEY) {
-    throw new Error('DEEPSEEK_API_KEY is not configured. Please set it in environment variables.');
-  }
-
-  const prompt = buildPrompt(topic, batchCount);
-
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        {
-          role: 'system',
-          content: 'Ты помощник для создания вопросов квизов. Отвечай только валидным JSON без дополнительного текста.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 4000,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`DeepSeek API error: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  const content = data.choices[0]?.message?.content?.trim();
-
-  if (!content) {
-    throw new Error('No content received from AI');
-  }
-
-  const questions = parseAIResponse(content);
-  return formatQuestions(questions);
-}
 
 /**
  * Generate a batch of questions using specified provider
@@ -289,12 +187,8 @@ async function generateQuestionsBatch(topic, batchCount, provider = PROVIDERS.GR
     switch (provider) {
       case PROVIDERS.GROQ:
         return await generateWithGroq(topic, batchCount);
-      case PROVIDERS.OPENAI:
-        return await generateWithOpenAI(topic, batchCount);
       case PROVIDERS.GEMINI:
         return await generateWithGemini(topic, batchCount);
-      case PROVIDERS.DEEPSEEK:
-        return await generateWithDeepSeek(topic, batchCount);
       default:
         throw new Error(`Unknown provider: ${provider}`);
     }
