@@ -40,6 +40,9 @@ DATABASE_PATH=./quiz.db
 
 # CORS
 CLIENT_URL=http://localhost:5173
+
+# AI Question Generation (optional, free tier available)
+GROQ_API_KEY=your-groq-api-key
 ```
 
 3. Run the server:
@@ -62,6 +65,17 @@ JWT_SECRET=your-secret-key
 JWT_EXPIRY=7d
 DATABASE_PATH=./quiz.db
 CLIENT_URL=https://quizzroom.netlify.app
+GROQ_API_KEY=your-groq-api-key
 ```
+
+### AI Question Generation
+
+The server supports AI-powered question generation using Groq API (free tier available).
+
+1. Get a free API key from [Groq Console](https://console.groq.com/)
+2. Add `GROQ_API_KEY` to your `.env` file
+3. Users can generate quiz questions by entering a topic in the quiz creation page
+
+**Note:** If `GROQ_API_KEY` is not set, the AI generation feature will be disabled and show an error when used.
 
 

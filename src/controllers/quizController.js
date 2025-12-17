@@ -6,6 +6,7 @@ const {
   deleteQuiz,
   listQuizzesByCreator
 } = require('../models/quiz');
+const { generateQuestions } = require('../services/aiGenerator');
 
 const quizSchema = Joi.object({
   title: Joi.string().min(1).max(255).required(),
@@ -94,12 +95,36 @@ async function listMyQuizzesHandler(req, res, next) {
   }
 }
 
+const generateQuestionsSchema = Joi.object({
+  topic: Joi.string().min(1).max(255).required(),
+  count: Joi.number().integer().min(1).max(20).optional().default(5)
+});
+
+async function generateQuestionsHandler(req, res, next) {
+  try {
+    const { error, value } = generateQuestionsSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    const questions = await generateQuestions(value.topic, value.count);
+    res.json({ questions });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Generate questions error:', err);
+    res.status(500).json({ 
+      error: err.message || 'Failed to generate questions. Please check your API key configuration.' 
+    });
+  }
+}
+
 module.exports = {
   createQuizHandler,
   getQuizHandler,
   updateQuizHandler,
   deleteQuizHandler,
-  listMyQuizzesHandler
+  listMyQuizzesHandler,
+  generateQuestionsHandler
 };
 
 
