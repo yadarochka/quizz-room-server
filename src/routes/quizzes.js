@@ -6,13 +6,15 @@ const {
   updateQuizHandler,
   deleteQuizHandler,
   listMyQuizzesHandler,
-  generateQuestionsHandler
+  generateQuestionsHandler,
+  listCompletedQuizzesHandler
 } = require('../controllers/quizController');
 
 const router = express.Router();
 
 router.post('/', authMiddleware.requireAuth, createQuizHandler);
 router.post('/generate-questions', authMiddleware.requireAuth, generateQuestionsHandler);
+router.get('/completed', authMiddleware.requireAuth, listCompletedQuizzesHandler);
 router.get('/:quiz_id', getQuizHandler);
 router.put('/:quiz_id', authMiddleware.requireAuth, updateQuizHandler);
 router.delete('/:quiz_id', authMiddleware.requireAuth, deleteQuizHandler);

@@ -119,13 +119,27 @@ async function generateQuestionsHandler(req, res, next) {
   }
 }
 
+const { listCompletedQuizzes } = require('../models/session');
+
+async function listCompletedQuizzesHandler(req, res, next) {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const result = await listCompletedQuizzes(page, limit);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createQuizHandler,
   getQuizHandler,
   updateQuizHandler,
   deleteQuizHandler,
   listMyQuizzesHandler,
-  generateQuestionsHandler
+  generateQuestionsHandler,
+  listCompletedQuizzesHandler
 };
 
 

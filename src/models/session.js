@@ -167,11 +167,81 @@ async function getSessionResults(sessionId) {
   };
 }
 
+async function listCompletedQuizzes(page = 1, limit = 20) {
+  const db = getDb();
+  const offset = (page - 1) * limit;
+
+  // Get all completed sessions with quiz and creator info
+  const sessions = await all(
+    db,
+    `SELECT 
+      qs.id as session_id,
+      qs.quiz_id,
+      qs.created_at as session_created_at,
+      qs.ended_at,
+      q.title as quiz_title,
+      q.creator_id,
+      u.name as creator_name,
+      u.email as creator_email
+    FROM quiz_sessions qs
+    JOIN quizzes q ON qs.quiz_id = q.id
+    JOIN users u ON q.creator_id = u.id
+    WHERE qs.status = 'completed'
+    ORDER BY qs.ended_at DESC
+    LIMIT ? OFFSET ?`,
+    [limit, offset]
+  );
+
+  // Get question count and participant count for each session
+  const sessionsWithStats = await Promise.all(sessions.map(async (session) => {
+    const questionCountRow = await get(
+      db,
+      'SELECT COUNT(*) as cnt FROM questions WHERE quiz_id = ?',
+      [session.quiz_id]
+    );
+    const questionCount = questionCountRow ? questionCountRow.cnt : 0;
+
+    const participantCountRow = await get(
+      db,
+      'SELECT COUNT(*) as cnt FROM session_participants WHERE session_id = ?',
+      [session.session_id]
+    );
+    const participantCount = participantCountRow ? participantCountRow.cnt : 0;
+
+    return {
+      session_id: session.session_id,
+      quiz_id: session.quiz_id,
+      quiz_title: session.quiz_title,
+      creator_id: session.creator_id,
+      creator_name: session.creator_name,
+      creator_email: session.creator_email,
+      question_count: questionCount,
+      participant_count: participantCount,
+      created_at: session.session_created_at,
+      ended_at: session.ended_at
+    };
+  }));
+
+  const totalRow = await get(
+    db,
+    'SELECT COUNT(*) as count FROM quiz_sessions WHERE status = "completed"',
+    []
+  );
+
+  return {
+    data: sessionsWithStats,
+    total: totalRow ? totalRow.count : 0,
+    page,
+    limit
+  };
+}
+
 module.exports = {
   createSession,
   getSessionById,
   getSessionByQuizId,
-  getSessionResults
+  getSessionResults,
+  listCompletedQuizzes
 };
 
 
