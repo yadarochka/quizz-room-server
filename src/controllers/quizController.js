@@ -97,7 +97,8 @@ async function listMyQuizzesHandler(req, res, next) {
 
 const generateQuestionsSchema = Joi.object({
   topic: Joi.string().min(1).max(255).required(),
-  count: Joi.number().integer().min(1).max(20).optional().default(5)
+  count: Joi.number().integer().min(1).max(20).optional().default(5),
+  provider: Joi.string().valid('groq', 'openai', 'gemini', 'deepseek').optional().default('groq')
 });
 
 async function generateQuestionsHandler(req, res, next) {
@@ -107,7 +108,7 @@ async function generateQuestionsHandler(req, res, next) {
       return res.status(400).json({ error: error.message });
     }
 
-    const questions = await generateQuestions(value.topic, value.count);
+    const questions = await generateQuestions(value.topic, value.count, value.provider);
     res.json({ questions });
   } catch (err) {
     // eslint-disable-next-line no-console

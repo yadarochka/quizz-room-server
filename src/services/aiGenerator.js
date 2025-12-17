@@ -1,25 +1,23 @@
 /**
- * AI Question Generator using Groq API (free tier)
- * Generates quiz questions based on topic/theme
+ * AI Question Generator supporting multiple providers
+ * Supports: Groq, OpenAI, Gemini, DeepSeek
  */
 
 const DEFAULT_QUESTIONS_COUNT = 5;
 const DEFAULT_TIME_LIMIT = 30;
 
-/**
- * Generate a batch of questions (internal function)
- * @param {string} topic - The topic/theme of the quiz
- * @param {number} batchCount - Number of questions in this batch
- * @returns {Promise<Array>} Array of generated questions
- */
-async function generateQuestionsBatch(topic, batchCount) {
-  const GROQ_API_KEY = process.env.GROQ_API_KEY;
-  
-  if (!GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY is not configured. Please set it in environment variables.');
-  }
+const PROVIDERS = {
+  GROQ: 'groq',
+  OPENAI: 'openai',
+  GEMINI: 'gemini',
+  DEEPSEEK: 'deepseek'
+};
 
-  const prompt = `Создай ${batchCount} вопросов для квиза на тему "${topic}". 
+/**
+ * Build the prompt for question generation
+ */
+function buildPrompt(topic, batchCount) {
+  return `Создай ${batchCount} вопросов для квиза на тему "${topic}". 
 
 Каждый вопрос должен иметь:
 - Текст вопроса (интересный и понятный)
@@ -41,83 +39,269 @@ async function generateQuestionsBatch(topic, batchCount) {
 ]
 
 Важно: верни ТОЛЬКО валидный JSON, без markdown форматирования, без объяснений.`;
+}
+
+/**
+ * Parse AI response and extract JSON
+ */
+function parseAIResponse(content) {
+  let jsonContent = content;
+  if (content.includes('```json')) {
+    jsonContent = content.split('```json')[1].split('```')[0].trim();
+  } else if (content.includes('```')) {
+    jsonContent = content.split('```')[1].split('```')[0].trim();
+  }
 
   try {
-    // Use Groq API (free tier)
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant', // Updated model - fast and free on Groq
-        messages: [
-          {
-            role: 'system',
-            content: 'Ты помощник для создания вопросов квизов. Отвечай только валидным JSON без дополнительного текста.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
+    return JSON.parse(jsonContent);
+  } catch (parseError) {
+    // Try to find JSON array in the response
+    const jsonMatch = jsonContent.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('Failed to parse AI response as JSON');
+  }
+}
+
+/**
+ * Validate and format questions
+ */
+function formatQuestions(rawQuestions) {
+  if (!Array.isArray(rawQuestions)) {
+    throw new Error('AI returned invalid format: expected array');
+  }
+
+  return rawQuestions.map((q, index) => ({
+    text: q.text || `Вопрос ${index + 1}`,
+    time_limit: q.time_limit || DEFAULT_TIME_LIMIT,
+    answers: (q.answers || []).map((a, aIndex) => ({
+      text: a.text || `Вариант ${aIndex + 1}`,
+      is_correct: a.is_correct === true
+    }))
+  })).filter(q => q.text && q.answers.length >= 2);
+}
+
+/**
+ * Generate questions using Groq API
+ */
+async function generateWithGroq(topic, batchCount) {
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  
+  if (!GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY is not configured. Please set it in environment variables.');
+  }
+
+  const prompt = buildPrompt(topic, batchCount);
+
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${GROQ_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        {
+          role: 'system',
+          content: 'Ты помощник для создания вопросов квизов. Отвечай только валидным JSON без дополнительного текста.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Groq API error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices[0]?.message?.content?.trim();
+
+  if (!content) {
+    throw new Error('No content received from AI');
+  }
+
+  const questions = parseAIResponse(content);
+  return formatQuestions(questions);
+}
+
+/**
+ * Generate questions using OpenAI API
+ */
+async function generateWithOpenAI(topic, batchCount) {
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not configured. Please set it in environment variables.');
+  }
+
+  const prompt = buildPrompt(topic, batchCount);
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: 'Ты помощник для создания вопросов квизов. Отвечай только валидным JSON без дополнительного текста.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices[0]?.message?.content?.trim();
+
+  if (!content) {
+    throw new Error('No content received from AI');
+  }
+
+  const questions = parseAIResponse(content);
+  return formatQuestions(questions);
+}
+
+/**
+ * Generate questions using Google Gemini API
+ */
+async function generateWithGemini(topic, batchCount) {
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not configured. Please set it in environment variables.');
+  }
+
+  const prompt = buildPrompt(topic, batchCount);
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{
+          text: `Ты помощник для создания вопросов квизов. Отвечай только валидным JSON без дополнительного текста.\n\n${prompt}`
+        }]
+      }],
+      generationConfig: {
         temperature: 0.7,
-        max_tokens: 4000,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Groq API error: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content?.trim();
-
-    if (!content) {
-      throw new Error('No content received from AI');
-    }
-
-    // Extract JSON from response (remove markdown code blocks if present)
-    let jsonContent = content;
-    if (content.includes('```json')) {
-      jsonContent = content.split('```json')[1].split('```')[0].trim();
-    } else if (content.includes('```')) {
-      jsonContent = content.split('```')[1].split('```')[0].trim();
-    }
-
-    let questions;
-    try {
-      questions = JSON.parse(jsonContent);
-    } catch (parseError) {
-      // Try to find JSON array in the response
-      const jsonMatch = jsonContent.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        questions = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('Failed to parse AI response as JSON');
+        maxOutputTokens: 4000,
       }
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+  if (!content) {
+    throw new Error('No content received from AI');
+  }
+
+  const questions = parseAIResponse(content);
+  return formatQuestions(questions);
+}
+
+/**
+ * Generate questions using DeepSeek API
+ */
+async function generateWithDeepSeek(topic, batchCount) {
+  const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+  
+  if (!DEEPSEEK_API_KEY) {
+    throw new Error('DEEPSEEK_API_KEY is not configured. Please set it in environment variables.');
+  }
+
+  const prompt = buildPrompt(topic, batchCount);
+
+  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        {
+          role: 'system',
+          content: 'Ты помощник для создания вопросов квизов. Отвечай только валидным JSON без дополнительного текста.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`DeepSeek API error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices[0]?.message?.content?.trim();
+
+  if (!content) {
+    throw new Error('No content received from AI');
+  }
+
+  const questions = parseAIResponse(content);
+  return formatQuestions(questions);
+}
+
+/**
+ * Generate a batch of questions using specified provider
+ */
+async function generateQuestionsBatch(topic, batchCount, provider = PROVIDERS.GROQ) {
+  try {
+    switch (provider) {
+      case PROVIDERS.GROQ:
+        return await generateWithGroq(topic, batchCount);
+      case PROVIDERS.OPENAI:
+        return await generateWithOpenAI(topic, batchCount);
+      case PROVIDERS.GEMINI:
+        return await generateWithGemini(topic, batchCount);
+      case PROVIDERS.DEEPSEEK:
+        return await generateWithDeepSeek(topic, batchCount);
+      default:
+        throw new Error(`Unknown provider: ${provider}`);
     }
-
-    // Validate and format questions
-    if (!Array.isArray(questions)) {
-      throw new Error('AI returned invalid format: expected array');
-    }
-
-    return questions.map((q, index) => ({
-      text: q.text || `Вопрос ${index + 1}`,
-      time_limit: q.time_limit || DEFAULT_TIME_LIMIT,
-      answers: (q.answers || []).map((a, aIndex) => ({
-        text: a.text || `Вариант ${aIndex + 1}`,
-        is_correct: a.is_correct === true
-      }))
-    })).filter(q => q.text && q.answers.length >= 2);
-
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error('AI generation error:', error);
-    throw new Error(`Failed to generate questions: ${error.message}`);
+    console.error(`AI generation error (${provider}):`, error);
+    throw new Error(`Failed to generate questions with ${provider}: ${error.message}`);
   }
 }
 
@@ -126,9 +310,10 @@ async function generateQuestionsBatch(topic, batchCount) {
  * Splits large requests into multiple batches if needed
  * @param {string} topic - The topic/theme of the quiz
  * @param {number} count - Number of questions to generate (default: 5)
+ * @param {string} provider - AI provider to use (default: 'groq')
  * @returns {Promise<Array>} Array of generated questions
  */
-async function generateQuestions(topic, count = DEFAULT_QUESTIONS_COUNT) {
+async function generateQuestions(topic, count = DEFAULT_QUESTIONS_COUNT, provider = PROVIDERS.GROQ) {
   const MAX_QUESTIONS_PER_BATCH = 10; // API limit per request
   const allQuestions = [];
 
@@ -146,9 +331,9 @@ async function generateQuestions(topic, count = DEFAULT_QUESTIONS_COUNT) {
   for (let i = 0; i < batches.length; i++) {
     const batchCount = batches[i];
     // eslint-disable-next-line no-console
-    console.log(`Generating batch ${i + 1}/${batches.length} with ${batchCount} questions...`);
+    console.log(`Generating batch ${i + 1}/${batches.length} with ${batchCount} questions using ${provider}...`);
     
-    const batchQuestions = await generateQuestionsBatch(topic, batchCount);
+    const batchQuestions = await generateQuestionsBatch(topic, batchCount, provider);
     allQuestions.push(...batchQuestions);
     
     // Small delay between batches to avoid rate limiting
@@ -161,6 +346,6 @@ async function generateQuestions(topic, count = DEFAULT_QUESTIONS_COUNT) {
 }
 
 module.exports = {
-  generateQuestions
+  generateQuestions,
+  PROVIDERS
 };
-
