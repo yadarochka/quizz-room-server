@@ -3,6 +3,8 @@ const { getQuizWithQuestions } = require('../models/quiz');
 
 // In-memory state for running sessions (current question, timers)
 const sessionRuntimeState = new Map();
+// Track answered participants per question
+const questionAnsweredCount = new Map();
 
 function getSessionRoom(sessionId) {
   return `session_${sessionId}`;
@@ -89,7 +91,20 @@ async function startQuestion(io, sessionId, questionIndex) {
 
   state.currentQuestionIndex = questionIndex;
 
+  // Reset answered count for new question
+  const questionKey = `${sessionId}_${question.id}`;
+  questionAnsweredCount.set(questionKey, 0);
+
   const room = getSessionRoom(sessionId);
+
+  // Get total participants count
+  const db = getDb();
+  const participantCountRow = await get(
+    db,
+    'SELECT COUNT(*) as cnt FROM session_participants WHERE session_id = ?',
+    [sessionId]
+  );
+  const totalParticipants = participantCountRow ? participantCountRow.cnt : 0;
 
   io.to(room).emit('quiz_started', {
     current_question: questionIndex + 1,
@@ -102,7 +117,8 @@ async function startQuestion(io, sessionId, questionIndex) {
     answers: question.answers.map((a) => ({ id: a.id, text: a.text })),
     time_limit: question.time_limit,
     question_number: questionIndex + 1,
-    total_questions: state.questions.length
+    total_questions: state.questions.length,
+    total_participants: totalParticipants
   });
 
   if (state.timer) {
@@ -338,10 +354,60 @@ async function handleSubmitAnswer(io, socket, user, payload) {
     socket.emit('answer_submitted', { status: 'ok' });
 
     const room = getSessionRoom(sessionId);
+    
+    // Track answered count
+    const questionKey = `${sessionId}_${question_id}`;
+    const currentCount = questionAnsweredCount.get(questionKey) || 0;
+    const newCount = currentCount + 1;
+    questionAnsweredCount.set(questionKey, newCount);
+
+    // Get total participants
+    const participantCountRow = await get(
+      db,
+      'SELECT COUNT(*) as cnt FROM session_participants WHERE session_id = ?',
+      [sessionId]
+    );
+    const totalParticipants = participantCountRow ? participantCountRow.cnt : 0;
+
     io.to(room).emit('participant_answered', {
       display_name: socket.data.displayName || user.name || 'Unknown',
-      answered: true
+      answered: true,
+      answered_count: newCount,
+      total_participants: totalParticipants
     });
+
+    // If all participants answered, move to next question
+    if (newCount >= totalParticipants && totalParticipants > 0) {
+      const state = sessionRuntimeState.get(sessionId);
+      if (state) {
+        // Find current question index
+        const currentQuestionIndex = state.questions.findIndex(q => q.id === question_id);
+        if (currentQuestionIndex !== -1 && state.currentQuestionIndex === currentQuestionIndex) {
+          // Clear timer
+          if (state.timer) {
+            clearTimeout(state.timer);
+            state.timer = null;
+          }
+          // Move to next question or finish
+          const nextIndex = currentQuestionIndex + 1;
+          if (nextIndex < state.questions.length) {
+            setTimeout(() => {
+              startQuestion(io, sessionId, nextIndex).catch((err) => {
+                // eslint-disable-next-line no-console
+                console.error('start next question error', err);
+              });
+            }, 2000); // Small delay before next question
+          } else {
+            setTimeout(() => {
+              finishQuiz(io, sessionId).catch((err) => {
+                // eslint-disable-next-line no-console
+                console.error('finish quiz error', err);
+              });
+            }, 2000);
+          }
+        }
+      }
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('submit_answer error', err);
@@ -380,6 +446,11 @@ function registerSocketHandlers(io, socket, user) {
 
   socket.on('submit_answer', (payload) => {
     handleSubmitAnswer(io, socket, user, payload);
+  });
+
+  socket.on('all_answered', (payload) => {
+    // This is handled in handleSubmitAnswer, but keeping for compatibility
+    // The server automatically detects when all answered
   });
 
   socket.on('leave_room', () => {
