@@ -1,14 +1,12 @@
 /**
- * AI Question Generator supporting multiple providers
- * Supports: Groq, Gemini (both free)
+ * AI Question Generator using Groq API (free)
  */
 
 const DEFAULT_QUESTIONS_COUNT = 5;
 const DEFAULT_TIME_LIMIT = 15;
 
 const PROVIDERS = {
-  GROQ: 'groq',
-  GEMINI: 'gemini'
+  GROQ: 'groq'
 };
 
 /**
@@ -133,53 +131,6 @@ async function generateWithGroq(topic, batchCount) {
 
 
 /**
- * Generate questions using Google Gemini API
- */
-async function generateWithGemini(topic, batchCount) {
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-  
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured. Please set it in environment variables.');
-  }
-
-  const prompt = buildPrompt(topic, batchCount);
-
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{
-          text: `Ты помощник для создания вопросов квизов. Отвечай только валидным JSON без дополнительного текста.\n\n${prompt}`
-        }]
-      }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4000,
-      }
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-
-  if (!content) {
-    throw new Error('No content received from AI');
-  }
-
-  const questions = parseAIResponse(content);
-  return formatQuestions(questions);
-}
-
-
-/**
  * Generate a batch of questions using specified provider
  */
 async function generateQuestionsBatch(topic, batchCount, provider = PROVIDERS.GROQ) {
@@ -187,8 +138,6 @@ async function generateQuestionsBatch(topic, batchCount, provider = PROVIDERS.GR
     switch (provider) {
       case PROVIDERS.GROQ:
         return await generateWithGroq(topic, batchCount);
-      case PROVIDERS.GEMINI:
-        return await generateWithGemini(topic, batchCount);
       default:
         throw new Error(`Unknown provider: ${provider}`);
     }
