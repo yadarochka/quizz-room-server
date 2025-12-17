@@ -7,19 +7,19 @@ const DEFAULT_QUESTIONS_COUNT = 5;
 const DEFAULT_TIME_LIMIT = 30;
 
 /**
- * Generate quiz questions using AI
+ * Generate a batch of questions (internal function)
  * @param {string} topic - The topic/theme of the quiz
- * @param {number} count - Number of questions to generate (default: 5)
+ * @param {number} batchCount - Number of questions in this batch
  * @returns {Promise<Array>} Array of generated questions
  */
-async function generateQuestions(topic, count = DEFAULT_QUESTIONS_COUNT) {
+async function generateQuestionsBatch(topic, batchCount) {
   const GROQ_API_KEY = process.env.GROQ_API_KEY;
   
   if (!GROQ_API_KEY) {
     throw new Error('GROQ_API_KEY is not configured. Please set it in environment variables.');
   }
 
-  const prompt = `Создай ${count} вопросов для квиза на тему "${topic}". 
+  const prompt = `Создай ${batchCount} вопросов для квиза на тему "${topic}". 
 
 Каждый вопрос должен иметь:
 - Текст вопроса (интересный и понятный)
@@ -119,6 +119,45 @@ async function generateQuestions(topic, count = DEFAULT_QUESTIONS_COUNT) {
     console.error('AI generation error:', error);
     throw new Error(`Failed to generate questions: ${error.message}`);
   }
+}
+
+/**
+ * Generate quiz questions using AI
+ * Splits large requests into multiple batches if needed
+ * @param {string} topic - The topic/theme of the quiz
+ * @param {number} count - Number of questions to generate (default: 5)
+ * @returns {Promise<Array>} Array of generated questions
+ */
+async function generateQuestions(topic, count = DEFAULT_QUESTIONS_COUNT) {
+  const MAX_QUESTIONS_PER_BATCH = 10; // API limit per request
+  const allQuestions = [];
+
+  // Split into batches if needed
+  const batches = [];
+  let remaining = count;
+  
+  while (remaining > 0) {
+    const batchSize = Math.min(remaining, MAX_QUESTIONS_PER_BATCH);
+    batches.push(batchSize);
+    remaining -= batchSize;
+  }
+
+  // Generate questions in batches
+  for (let i = 0; i < batches.length; i++) {
+    const batchCount = batches[i];
+    // eslint-disable-next-line no-console
+    console.log(`Generating batch ${i + 1}/${batches.length} with ${batchCount} questions...`);
+    
+    const batchQuestions = await generateQuestionsBatch(topic, batchCount);
+    allQuestions.push(...batchQuestions);
+    
+    // Small delay between batches to avoid rate limiting
+    if (i < batches.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+
+  return allQuestions.slice(0, count); // Ensure we return exactly the requested count
 }
 
 module.exports = {
