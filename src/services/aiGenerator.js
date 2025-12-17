@@ -1,12 +1,14 @@
 /**
- * AI Question Generator using Groq API (free)
+ * AI Question Generator supporting multiple providers
+ * Supports: Groq (free), OpenRouter.ai
  */
 
 const DEFAULT_QUESTIONS_COUNT = 5;
 const DEFAULT_TIME_LIMIT = 15;
 
 const PROVIDERS = {
-  GROQ: 'groq'
+  GROQ: 'groq',
+  OPENROUTER: 'openrouter'
 };
 
 /**
@@ -129,6 +131,58 @@ async function generateWithGroq(topic, batchCount) {
   return formatQuestions(questions);
 }
 
+/**
+ * Generate questions using OpenRouter.ai API
+ */
+async function generateWithOpenRouter(topic, batchCount) {
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+  
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY is not configured. Please set it in environment variables.');
+  }
+
+  const prompt = buildPrompt(topic, batchCount);
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.CLIENT_URL || 'https://quizzroom.netlify.app',
+      'X-Title': 'Quiz Room - Question Generator',
+    },
+    body: JSON.stringify({
+      model: 'openai/gpt-3.5-turbo', // Можно использовать любую модель из OpenRouter
+      messages: [
+        {
+          role: 'system',
+          content: 'Ты помощник для создания вопросов квизов. Отвечай только валидным JSON без дополнительного текста.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices[0]?.message?.content?.trim();
+
+  if (!content) {
+    throw new Error('No content received from AI');
+  }
+
+  const questions = parseAIResponse(content);
+  return formatQuestions(questions);
+}
 
 /**
  * Generate a batch of questions using specified provider
@@ -138,6 +192,8 @@ async function generateQuestionsBatch(topic, batchCount, provider = PROVIDERS.GR
     switch (provider) {
       case PROVIDERS.GROQ:
         return await generateWithGroq(topic, batchCount);
+      case PROVIDERS.OPENROUTER:
+        return await generateWithOpenRouter(topic, batchCount);
       default:
         throw new Error(`Unknown provider: ${provider}`);
     }
