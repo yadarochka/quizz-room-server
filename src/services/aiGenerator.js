@@ -63,6 +63,18 @@ function parseAIResponse(content) {
 }
 
 /**
+ * Shuffle array using Fisher-Yates algorithm
+ */
+function shuffleArray(array) {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+/**
  * Validate and format questions
  */
 function formatQuestions(rawQuestions) {
@@ -70,14 +82,21 @@ function formatQuestions(rawQuestions) {
     throw new Error('AI returned invalid format: expected array');
   }
 
-  return rawQuestions.map((q, index) => ({
-    text: q.text || `Вопрос ${index + 1}`,
-    time_limit: q.time_limit || DEFAULT_TIME_LIMIT,
-    answers: (q.answers || []).map((a, aIndex) => ({
+  return rawQuestions.map((q, index) => {
+    const answers = (q.answers || []).map((a, aIndex) => ({
       text: a.text || `Вариант ${aIndex + 1}`,
       is_correct: a.is_correct === true
-    }))
-  })).filter(q => q.text && q.answers.length >= 2);
+    }));
+    
+    // Shuffle answers so correct answer is not always first
+    const shuffledAnswers = shuffleArray(answers);
+    
+    return {
+      text: q.text || `Вопрос ${index + 1}`,
+      time_limit: q.time_limit || DEFAULT_TIME_LIMIT,
+      answers: shuffledAnswers
+    };
+  }).filter(q => q.text && q.answers.length >= 2);
 }
 
 /**
