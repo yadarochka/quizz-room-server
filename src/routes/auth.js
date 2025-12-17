@@ -16,7 +16,8 @@ router.get(
   (req, res) => {
     const token = signToken(req.user);
     setAuthCookie(res, token);
-    const redirectUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    const clientUrl = (process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/+$/, '');
+    const redirectUrl = `${clientUrl}/quizzes/create`;
     res.redirect(redirectUrl);
   }
 );
