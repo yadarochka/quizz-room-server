@@ -44,6 +44,25 @@ async function getSessionById(sessionId) {
   return session;
 }
 
+async function getSessionByQuizId(quizId) {
+  const db = getDb();
+  const session = await get(
+    db,
+    'SELECT * FROM quiz_sessions WHERE quiz_id = ? AND status IN ("waiting","in_progress") ORDER BY created_at DESC LIMIT 1',
+    [quizId]
+  );
+  if (!session) return null;
+
+  const participants = await all(
+    db,
+    'SELECT user_id, display_name, joined_at FROM session_participants WHERE session_id = ?',
+    [session.id]
+  );
+
+  session.participants = participants;
+  return session;
+}
+
 async function getSessionResults(sessionId) {
   const db = getDb();
 
@@ -87,6 +106,7 @@ async function getSessionResults(sessionId) {
 module.exports = {
   createSession,
   getSessionById,
+  getSessionByQuizId,
   getSessionResults
 };
 

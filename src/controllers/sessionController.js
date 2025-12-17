@@ -3,6 +3,7 @@ const { getDb, get } = require('../config/database');
 const {
   createSession,
   getSessionById,
+  getSessionByQuizId,
   getSessionResults
 } = require('../models/session');
 
@@ -58,6 +59,25 @@ async function getSessionHandler(req, res, next) {
   }
 }
 
+async function getSessionByQuizHandler(req, res, next) {
+  try {
+    const session = await getSessionByQuizId(req.params.quiz_id);
+    if (!session) {
+      return res.status(404).json({ error: 'Active session not found for this quiz' });
+    }
+    res.json({
+      id: session.id,
+      quiz_id: session.quiz_id,
+      room_code: session.room_code,
+      status: session.status,
+      creator_id: session.creator_id,
+      participants: session.participants
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function getSessionResultsHandler(req, res, next) {
   try {
     const result = await getSessionResults(req.params.session_id);
@@ -73,6 +93,7 @@ async function getSessionResultsHandler(req, res, next) {
 module.exports = {
   createSessionHandler,
   getSessionHandler,
+  getSessionByQuizHandler,
   getSessionResultsHandler
 };
 
