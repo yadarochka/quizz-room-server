@@ -28,6 +28,37 @@ passport.use(
         );
 
         if (existingUser) {
+          // Update user data if it changed (name, email, avatar)
+          const email =
+            (profile.emails && profile.emails[0] && profile.emails[0].value) ||
+            (profile._json && profile._json.default_email) ||
+            null;
+          const name =
+            profile.displayName ||
+            (profile.username ? profile.username : null) ||
+            'Unknown';
+          const avatar =
+            (profile.photos && profile.photos[0] && profile.photos[0].value) ||
+            (profile._json && profile._json.default_avatar_id
+              ? `https://avatars.yandex.net/get-yapic/${profile._json.default_avatar_id}/islands-200`
+              : null);
+
+          // Only update if data changed
+          if (
+            existingUser.name !== name ||
+            existingUser.email !== email ||
+            existingUser.avatar_url !== avatar
+          ) {
+            await run(
+              db,
+              'UPDATE users SET name = ?, email = ?, avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+              [name, email, avatar, existingUser.id]
+            );
+            // Fetch updated user
+            const updatedUser = await get(db, 'SELECT * FROM users WHERE id = ?', [existingUser.id]);
+            return done(null, updatedUser);
+          }
+
           return done(null, existingUser);
         }
 

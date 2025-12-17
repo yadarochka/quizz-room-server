@@ -49,7 +49,7 @@ async function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       provider TEXT NOT NULL DEFAULT 'yandex',
       provider_id TEXT UNIQUE NOT NULL,
-      email TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE,
       name TEXT NOT NULL,
       avatar_url TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

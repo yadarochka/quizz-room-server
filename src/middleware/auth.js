@@ -64,7 +64,12 @@ function requireAuth(req, res, next) {
           clearAuthCookie(res);
           return res.status(401).json({ error: 'User not found' });
         }
-        req.user = { ...payload, ...user };
+        // Use user data from DB, not from token, to ensure consistency
+        req.user = {
+          id: user.id,
+          email: user.email,
+          name: user.name
+        };
         next();
       })
       .catch((e) => res.status(401).json({ error: e.message }));
