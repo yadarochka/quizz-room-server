@@ -7,6 +7,11 @@ Backend for a real-time quiz application with:
 - Yandex OAuth + JWT in httpOnly cookies
 - SQLite database
 
+## Deploy
+
+- API (Render): https://quizz-room-server.onrender.com
+- Front (Netlify): https://quizzroom.netlify.app
+
 ### Setup
 
 1. Install dependencies:
@@ -44,5 +49,19 @@ npm run start
 ```
 
 Server will start on `http://localhost:3000`.
+
+### Prod env (пример)
+
+```text
+NODE_ENV=production
+PORT=3000
+YANDEX_CLIENT_ID=your-yandex-client-id
+YANDEX_CLIENT_SECRET=your-yandex-client-secret
+YANDEX_CALLBACK_URL=https://quizz-room-server.onrender.com/auth/yandex/callback
+JWT_SECRET=your-secret-key
+JWT_EXPIRY=7d
+DATABASE_PATH=./quiz.db
+CLIENT_URL=https://quizzroom.netlify.app
+```
 
 
